@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>研发团队智能助手 - Agent Chat</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --sidebar-bg: #1e293b;
+            --card-bg: #1e293b;
+            --text: #e2e8f0;
+            --text-secondary: #94a3b8;
+            --accent: #6366f1;
+            --accent-hover: #818cf8;
+            --border: #334155;
+            --user-bubble: #6366f1;
+            --assistant-bubble: #334155;
+            --success: #22c55e;
+            --warning: #eab308;
+            --error: #ef4444;
+            --tool-bg: #172033;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            padding: 16px;
+            flex-shrink: 0;
+        }
+
+        .sidebar-header {
+            font-size: 18px;
+            font-weight: 700;
+            padding: 12px 0 20px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 16px;
+        }
+
+        .sidebar-header .icon { margin-right: 8px; }
+
+        .scene-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .scene-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 14px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .scene-card:hover {
+            border-color: var(--accent);
+            background: rgba(99, 102, 241, 0.08);
+        }
+
+        .scene-card.active {
+            border-color: var(--accent);
+            background: rgba(99, 102, 241, 0.12);
+        }
+
+        .scene-title { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+        .scene-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+
+        .new-chat-btn {
+            width: 100%;
+            padding: 12px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 12px;
+            transition: background 0.2s;
+        }
+
+        .new-chat-btn:hover { background: var(--accent-hover); }
+
+        .sidebar-footer {
+            border-top: 1px solid var(--border);
+            padding-top: 12px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        /* Main Chat Area */
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .chat-header {
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .chat-header h2 { font-size: 16px; font-weight: 600; }
+        .chat-header .badge {
+            font-size: 11px;
+            padding: 3px 10px;
+            border-radius: 20px;
+            background: rgba(99, 102, 241, 0.2);
+            color: var(--accent-hover);
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .message {
+            display: flex;
+            gap: 10px;
+            max-width: 80%;
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user { align-self: flex-end; flex-direction: row-reverse; }
+        .message.assistant { align-self: flex-start; }
+
+        .message .avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        .message.user .avatar { background: var(--accent); }
+        .message.assistant .avatar { background: var(--assistant-bubble); }
+
+        .message .bubble {
+            padding: 12px 16px;
+            border-radius: 14px;
+            font-size: 14px;
+            line-height: 1.6;
+            position: relative;
+        }
+
+        .message.user .bubble {
+            background: var(--user-bubble);
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.assistant .bubble {
+            background: var(--assistant-bubble);
+            border-bottom-left-radius: 4px;
+        }
+
+        .message.assistant .bubble pre {
+            background: var(--bg);
+            padding: 12px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 8px 0;
+            font-size: 13px;
+        }
+
+        .message.assistant .bubble code {
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 13px;
+        }
+
+        .tool-call {
+            background: var(--tool-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin: 8px 0;
+            font-size: 12px;
+        }
+
+        .tool-call .tool-name {
+            color: var(--accent-hover);
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .tool-call .tool-result {
+            color: var(--text-secondary);
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .typing-indicator {
+            display: flex;
+            gap: 4px;
+            padding: 12px 16px;
+        }
+
+        .typing-indicator span {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-secondary);
+            animation: typing 1.4s infinite;
+        }
+
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typing {
+            0%, 60%, 100% { opacity: 0.3; }
+            30% { opacity: 1; }
+        }
+
+        .chat-input-area {
+            padding: 16px 24px;
+            border-top: 1px solid var(--border);
+        }
+
+        .input-row {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+
+        .chat-input {
+            flex: 1;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 12px 16px;
+            color: var(--text);
+            font-size: 14px;
+            resize: none;
+            max-height: 120px;
+            outline: none;
+            transition: border-color 0.2s;
+            font-family: inherit;
+        }
+
+        .chat-input:focus { border-color: var(--accent); }
+
+        .send-btn {
+            width: 44px;
+            height: 44px;
+            background: var(--accent);
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        .send-btn:hover { background: var(--accent-hover); }
+        .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .quick-actions {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+
+        .quick-btn {
+            padding: 6px 14px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .quick-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent-hover);
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+
+        .empty-state .icon { font-size: 48px; margin-bottom: 16px; }
+        .empty-state h3 { font-size: 20px; margin-bottom: 8px; color: var(--text); }
+        .empty-state p { font-size: 14px; max-width: 400px; line-height: 1.6; }
+
+        /* Subgraph panel */
+        .subgraph-panel {
+            width: 0;
+            overflow: hidden;
+            transition: width 0.3s;
+            background: var(--sidebar-bg);
+            border-left: 1px solid var(--border);
+        }
+
+        .subgraph-panel.open { width: 320px; }
+
+        .subgraph-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .subgraph-close {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 18px;
+        }
+
+        .subgraph-content { padding: 16px; overflow-y: auto; height: calc(100vh - 57px); }
+
+        .kg-entity {
+            padding: 8px 12px;
+            background: var(--card-bg);
+            border-radius: 8px;
+            margin-bottom: 6px;
+            font-size: 13px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .kg-entity .type-badge {
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: rgba(99, 102, 241, 0.2);
+            color: var(--accent-hover);
+        }
+
+        .kg-relation {
+            padding: 6px 12px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            border-left: 2px solid var(--border);
+            margin-left: 12px;
+            margin-bottom: 4px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .message { max-width: 90%; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- 登录遮罩层（未登录时显示） -->
+<div id="loginOverlay" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(15,23,42,0.92); z-index:9999; align-items:center; justify-content:center;">
+    <div style="width:360px; background:var(--card-bg); border:1px solid var(--border); border-radius:16px; padding:32px;">
+        <div style="text-align:center; margin-bottom:24px;">
+            <div style="font-size:40px; margin-bottom:8px;">🔐</div>
+            <div style="font-size:18px; font-weight:700;">请先登录</div>
+            <div style="font-size:13px; color:var(--text-secondary); margin-top:6px;">登录后即可使用研发团队智能助手</div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:12px;">
+            <input id="loginUser" type="text" placeholder="用户名" style="padding:12px 14px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:14px; outline:none;">
+            <input id="loginPass" type="password" placeholder="密码" style="padding:12px 14px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:14px; outline:none;" onkeydown="if(event.key==='Enter')doLogin()">
+            <div id="loginError" style="font-size:12px; color:var(--error); min-height:16px;"></div>
+            <button id="loginBtn" onclick="doLogin()" style="padding:12px; border:none; border-radius:10px; background:var(--accent); color:#fff; font-size:14px; font-weight:600; cursor:pointer;">登 录</button>
+            <div style="text-align:center; font-size:12px; color:var(--text-secondary); margin-top:4px;">
+                没有账号？请先在 <a href="/frontend/admin.html" style="color:var(--accent-hover);">管理页面</a> 注册
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Sidebar -->
+<div class="sidebar">
+    <div class="sidebar-header">
+        <span class="icon">🤖</span> 研发团队智能助手
+    </div>
+
+    <div class="scene-list">
+        <div class="scene-card active" onclick="selectScene('general')">
+            <div class="scene-title">💬 通用研发助手</div>
+            <div class="scene-desc">技术问答、文档查询、项目知识检索</div>
+        </div>
+        <div class="scene-card" onclick="selectScene('leave')">
+            <div class="scene-title">📧 请假助手</div>
+            <div class="scene-desc">查请假制度 → 收集信息 → 生成邮件</div>
+        </div>
+        <div class="scene-card" onclick="selectScene('supply')">
+            <div class="scene-title">📦 办公用品领用</div>
+            <div class="scene-desc">消耗分析 → 预测需求 → 提交申请</div>
+        </div>
+    </div>
+
+    <button class="new-chat-btn" onclick="newChat()">+ 新建对话</button>
+
+    <div class="sidebar-footer">
+        <div style="margin-bottom:4px;">可用工具: <span id="tool-count">加载中...</span></div>
+        <div>会话ID: <span id="conv-id">-</span></div>
+    </div>
+</div>
+
+<!-- Main Chat -->
+<div class="main">
+    <div class="chat-header">
+        <h2 id="scene-title">通用研发助手</h2>
+        <span class="badge" id="scene-badge">multi-turn</span>
+    </div>
+
+    <div class="chat-messages" id="messages">
+        <div class="empty-state">
+            <div class="icon">🤖</div>
+            <h3>研发团队智能助手</h3>
+            <p>我可以帮您检索知识库、分析文档、发送邮件、预测办公用品需求。选择一个场景开始吧！</p>
+        </div>
+    </div>
+
+    <div class="chat-input-area">
+        <div class="quick-actions" id="quick-actions">
+            <button class="quick-btn" onclick="sendQuick('我们项目有哪些技术栈？')">项目技术栈</button>
+            <button class="quick-btn" onclick="sendQuick('FastAPI 依赖哪些库？')">技术依赖查询</button>
+            <button class="quick-btn" onclick="selectScene('leave')">我要请假</button>
+            <button class="quick-btn" onclick="selectScene('supply')">领用办公用品</button>
+        </div>
+        <div class="input-row">
+            <textarea class="chat-input" id="chatInput" 
+                      placeholder="输入您的问题..."
+                      rows="1"
+                      onkeydown="handleKey(event)"></textarea>
+            <button class="send-btn" id="sendBtn" onclick="sendMessage()">➤</button>
+        </div>
+    </div>
+</div>
+
+<!-- Subgraph Panel -->
+<div class="subgraph-panel" id="subgraphPanel">
+    <div class="subgraph-header">
+        知识图谱关联
+        <button class="subgraph-close" onclick="closeSubgraph()">✕</button>
+    </div>
+    <div class="subgraph-content" id="subgraphContent"></div>
+</div>
+
+<script>
+    // ==================== State ====================
+    const state = {
+        conversationId: null,
+        currentScene: 'general',
+        loading: false,
+    };
+
+    const SCENE_CONFIG = {
+        general: {
+            title: '通用研发助手',
+            badge: 'multi-turn',
+            systemPrompt: '',
+            quickBtns: [
+                ['我们项目有哪些技术栈？', 'FastAPI 依赖哪些库？'],
+                ['PDF的内容\n\n文档上传规范是什么？', '知识库中有多少份文档？'],
+            ],
+            placeholder: '输入您的问题...',
+        },
+        leave: {
+            title: '请假助手',
+            badge: 'leave-agent',
+            systemPrompt: `你是一个请假流程助手。当用户提出请假需求时：
+1. 先用 rag_search 查询《员工请假管理制度》了解规则
+2. 通过多轮对话收集必要信息：请假类型、起止日期、直属主管邮箱
+3. 信息齐全后，用 send_email 发送请假申请邮件
+4. 邮件主题格式：「{请假类型}申请 - {姓名}」
+5. 邮件正文按公司制度格式生成`,
+            quickBtns: [
+                ['我要请假', '"我想请病假'],
+                ['请事假需要什么流程？', '年假有几天？'],
+            ],
+            placeholder: '描述您的请假需求...',
+        },
+        supply: {
+            title: '办公用品领用助手',
+            badge: 'supply-agent',
+            systemPrompt: `你是一个办公用品领用助手。当用户需要领用办公用品时：
+1. 先用 rag_search 查询上个月的办公用品消耗清单
+2. 拿到清单后，用 predict_consumption 分析趋势并预测本月需求
+3. 生成领用申请单（JSON格式，包含 applicant, department, items等）
+4. 用 submit_application 向第三方系统提交申请
+5. 如果预测工具返回了分析报告，整理后展示给用户`,
+            quickBtns: [
+                ['帮我分析上月消耗，预测本月需求', '提交办公用品领用申请'],
+                ['技术部本月需要领用办公用品', '查看上月消耗趋势'],
+            ],
+            placeholder: '描述您的办公用品需求...',
+        },
+    };
+
+    // ==================== Event Handlers ====================
+    function handleKey(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    }
+
+    // Auto-resize textarea
+    const input = document.getElementById('chatInput');
+    input.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+    });
+
+    // ==================== Scene Selection ====================
+    function selectScene(scene) {
+        state.conversationId = null;
+        state.currentScene = scene;
+        document.getElementById('conv-id').textContent = '-';
+        document.getElementById('messages').innerHTML = `
+            <div class="empty-state">
+                <div class="icon">${scene === 'general' ? '🤖' : scene === 'leave' ? '📧' : '📦'}</div>
+                <h3>${SCENE_CONFIG[scene].title}</h3>
+                <p>${getSceneDescription(scene)}</p>
+            </div>`;
+        document.getElementById('scene-title').textContent = SCENE_CONFIG[scene].title;
+        document.getElementById('scene-badge').textContent = SCENE_CONFIG[scene].badge;
+        document.getElementById('chatInput').placeholder = SCENE_CONFIG[scene].placeholder;
+
+        // Update quick buttons
+        const btns = SCENE_CONFIG[scene].quickBtns;
+        const quickDiv = document.getElementById('quick-actions');
+        quickDiv.innerHTML = '';
+        btns.forEach(row => {
+            row.forEach(label => {
+                const btn = document.createElement('button');
+                btn.className = 'quick-btn';
+                btn.textContent = label;
+                btn.onclick = () => sendQuick(label);
+                quickDiv.appendChild(btn);
+            });
+        });
+
+        // Update sidebar active state
+        document.querySelectorAll('.scene-card').forEach(c => c.classList.remove('active'));
+        document.querySelectorAll('.scene-card')[scene === 'general' ? 0 : scene === 'leave' ? 1 : 2].classList.add('active');
+
+        closeSubgraph();
+    }
+
+    function getSceneDescription(scene) {
+        const descs = {
+            general: '我可以帮您检索知识库、分析文档、回答技术问题。试试上面的快捷问题吧！',
+            leave: '我会帮您查询请假制度，收集必要信息，并生成/发送请假邮件。请告诉我您的请假需求。',
+            supply: '我会分析上个月消耗数据，预测本月需求，并帮您提交领用申请。告诉我您的需求吧！',
+        };
+        return descs[scene] || descs.general;
+    }
+
+    function sendQuick(text) {
+        document.getElementById('chatInput').value = text;
+        sendMessage();
+    }
+
+    function newChat() {
+        state.conversationId = null;
+        document.getElementById('conv-id').textContent = '-';
+        document.getElementById('messages').innerHTML = `
+            <div class="empty-state">
+                <div class="icon">🤖</div>
+                <h3>新对话已开始</h3>
+                <p>有什么可以帮助您的？</p>
+            </div>`;
+        closeSubgraph();
+    }
+
+    // ==================== Send Message ====================
+    async function sendMessage() {
+        if (state.loading) return;
+
+        const input = document.getElementById('chatInput');
+        const message = input.value.trim();
+        if (!message) return;
+
+        state.loading = true;
+        input.value = '';
+        input.style.height = 'auto';
+
+        // Clear empty state
+        const empty = document.querySelector('.empty-state');
+        if (empty) empty.remove();
+
+        // Add user message
+        addMessage('user', message);
+
+        // Add typing indicator
+        const typingId = addTypingIndicator();
+
+        const scene = SCENE_CONFIG[state.currentScene];
+
+        try {
+            const resp = await fetch('/agent/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + getToken(),
+                },
+                body: JSON.stringify({
+                    message: message,
+                    conversation_id: state.conversationId,
+                    system_prompt: scene.systemPrompt || undefined,
+                }),
+            });
+
+            if (!resp.ok) {
+                const err = await resp.json();
+                // 401 未授权：token 失效或未登录，弹出登录遮罩
+                if (resp.status === 401) {
+                    localStorage.removeItem('auth_token');
+                    showLoginOverlay();
+                    throw new Error('登录已过期，请重新登录');
+                }
+                throw new Error(err.detail || '请求失败');
+            }
+
+            const data = await resp.json();
+
+            // Update conversation ID
+            state.conversationId = data.conversation_id;
+            document.getElementById('conv-id').textContent = data.conversation_id;
+
+            // Remove typing indicator
+            removeTypingIndicator(typingId);
+
+            // Add assistant response with tool calls if any
+            addAssistantMessage(data.answer, data.tool_calls_made);
+
+            // If subgraph data exists, show it
+            if (data.subgraph) {
+                showSubgraph(data.subgraph);
+            }
+
+        } catch (err) {
+            removeTypingIndicator(typingId);
+            addError(err.message);
+        } finally {
+            state.loading = false;
+            document.getElementById('chatInput').focus();
+        }
+    }
+
+    // ==================== UI Helpers ====================
+    function addMessage(role, content) {
+        const container = document.getElementById('messages');
+        const div = document.createElement('div');
+        div.className = `message ${role}`;
+        div.innerHTML = `
+            <div class="avatar">${role === 'user' ? '👤' : '🤖'}</div>
+            <div class="bubble">${escapeHtml(content).replace(/\n/g, '<br>')}</div>`;
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
+    }
+
+    function addAssistantMessage(content, toolCalls) {
+        const container = document.getElementById('messages');
+        const div = document.createElement('div');
+        div.className = 'message assistant';
+
+        let html = '<div class="avatar">🤖</div><div class="bubble">';
+
+        // Show tool calls if any
+        if (toolCalls && toolCalls.length > 0) {
+            for (const tc of toolCalls) {
+                html += `<div class="tool-call">
+                    <div class="tool-name">🔧 调用工具: ${tc.name}</div>
+                    <div class="tool-result">参数: ${JSON.stringify(tc.args)}</div>
+                </div>`;
+            }
+        }
+
+        // Render content with markdown-like formatting
+        html += formatContent(content);
+        html += '</div>';
+
+        div.innerHTML = html;
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
+    }
+
+    function formatContent(text) {
+        if (!text) return '';
+        // Basic markdown: **bold**, code blocks, lists
+        let html = escapeHtml(text);
+        html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+        html = html.replace(/`(.+?)`/g, '<code>$1</code>');
+        html = html.replace(/^### (.+)$/gm, '<h4>$1</h4>');
+        html = html.replace(/^## (.+)$/gm, '<h3>$1</h3>');
+        html = html.replace(/^# (.+)$/gm, '<h2>$1</h2>');
+        html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
+        html = html.replace(/\n/g, '<br>');
+        return html;
+    }
+
+    function addTypingIndicator() {
+        const container = document.getElementById('messages');
+        const id = 'typing-' + Date.now();
+        const div = document.createElement('div');
+        div.className = 'message assistant';
+        div.id = id;
+        div.innerHTML = `
+            <div class="avatar">🤖</div>
+            <div class="bubble">
+                <div class="typing-indicator">
+                    <span></span><span></span><span></span>
+                </div>
+            </div>`;
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
+        return id;
+    }
+
+    function removeTypingIndicator(id) {
+        const el = document.getElementById(id);
+        if (el) el.remove();
+    }
+
+    function addError(message) {
+        const container = document.getElementById('messages');
+        const div = document.createElement('div');
+        div.className = 'message assistant';
+        div.style.cssText = 'color: var(--error);';
+        div.innerHTML = `<div class="avatar">⚠️</div><div class="bubble">${escapeHtml(message)}</div>`;
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function getToken() {
+        // 优先取当前登录 token，其次 localStorage
+        return localStorage.getItem('auth_token') || '';
+    }
+
+    // ==================== Authentication ====================
+    function getUrlParam(name) {
+        const url = new URL(window.location.href);
+        return url.searchParams.get(name);
+    }
+
+    // 初始化登录状态：从 admin 跳转 → 免登录；否则需登录
+    function initAuth() {
+        const fromAdmin = getUrlParam('from') === 'admin';
+
+        if (fromAdmin) {
+            // 从管理页跳转过来：读取 sessionStorage 中的 token（admin 已写入），视为已登录
+            const ssToken = sessionStorage.getItem('agent_auth_token');
+            if (ssToken) {
+                localStorage.setItem('auth_token', ssToken);
+            }
+            // 若 sessionStorage 无 token，回退到 admin 的 localStorage key
+            if (!localStorage.getItem('auth_token')) {
+                const adminToken = localStorage.getItem('rag_access_token');
+                if (adminToken) localStorage.setItem('auth_token', adminToken);
+            }
+        }
+
+        const token = getToken();
+        if (!token) {
+            // 未登录 → 显示登录遮罩
+            showLoginOverlay();
+            return false;
+        }
+        return true;
+    }
+
+    function showLoginOverlay() {
+        const overlay = document.getElementById('loginOverlay');
+        overlay.style.display = 'flex';
+    }
+
+    function hideLoginOverlay() {
+        document.getElementById('loginOverlay').style.display = 'none';
+    }
+
+    async function doLogin() {
+        const username = document.getElementById('loginUser').value.trim();
+        const password = document.getElementById('loginPass').value.trim();
+        const errorEl = document.getElementById('loginError');
+        const btn = document.getElementById('loginBtn');
+        errorEl.textContent = '';
+
+        if (!username || !password) {
+            errorEl.textContent = '请输入用户名和密码';
+            return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = '登录中...';
+
+        try {
+            // 后端登录接口使用 form-data（OAuth2 Password Flow）
+            const form = new URLSearchParams();
+            form.append('username', username);
+            form.append('password', password);
+
+            const resp = await fetch('/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: form.toString(),
+            });
+
+            const data = await resp.json();
+            if (!resp.ok) {
+                throw new Error(data.detail || '登录失败');
+            }
+
+            localStorage.setItem('auth_token', data.access_token);
+            hideLoginOverlay();
+            // 登录后加载工具列表
+            try {
+                const tResp = await fetch('/agent/tools', {
+                    headers: { 'Authorization': 'Bearer ' + getToken() },
+                });
+                if (tResp.ok) {
+                    const tools = await tResp.json();
+                    document.getElementById('tool-count').textContent = tools.length;
+                }
+            } catch (e) { /* ignore */ }
+        } catch (err) {
+            errorEl.textContent = err.message || '登录失败，请检查用户名和密码';
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '登 录';
+        }
+    }
+
+    // ==================== Subgraph Panel ====================
+    function showSubgraph(subgraph) {
+        if (!subgraph || !subgraph.nodes || subgraph.nodes.length === 0) return;
+
+        const panel = document.getElementById('subgraphPanel');
+        const content = document.getElementById('subgraphContent');
+
+        let html = '';
+
+        // Matched entities
+        if (subgraph.matched_entities && subgraph.matched_entities.length > 0) {
+            html += '<h4 style="margin-bottom:8px;">🎯 匹配实体</h4>';
+            for (const entity of subgraph.matched_entities) {
+                html += `<div class="kg-entity">
+                    <span>${escapeHtml(entity.name)}</span>
+                    <span class="type-badge">${escapeHtml(entity.type)} (${(entity.score * 100).toFixed(0)}%)</span>
+                </div>`;
+            }
+            html += '<hr style="border-color:var(--border);margin:12px 0;">';
+        }
+
+        // Related entities
+        html += '<h4 style="margin-bottom:8px;">🔗 相关实体</h4>';
+        for (const node of subgraph.nodes) {
+            if (subgraph.matched_entities && 
+                subgraph.matched_entities.some(me => me.name === node.name)) continue;
+            html += `<div class="kg-entity">
+                <span>${escapeHtml(node.name)}</span>
+                <span class="type-badge">${escapeHtml(node.type)}</span>
+            </div>`;
+        }
+
+        // Relations
+        if (subgraph.edges && subgraph.edges.length > 0) {
+            html += '<hr style="border-color:var(--border);margin:12px 0;">';
+            html += '<h4 style="margin-bottom:8px;">📐 关系</h4>';
+            for (const edge of subgraph.edges) {
+                html += `<div class="kg-relation">
+                    ${escapeHtml(edge.source_name)} → <strong>${escapeHtml(edge.relation)}</strong> → ${escapeHtml(edge.target_name)}
+                </div>`;
+            }
+        }
+
+        content.innerHTML = html;
+        panel.classList.add('open');
+    }
+
+    function closeSubgraph() {
+        document.getElementById('subgraphPanel').classList.remove('open');
+    }
+
+    // ==================== Init ====================
+    async function init() {
+        // 1. 先做登录校验
+        const authed = initAuth();
+        if (!authed) {
+            // 未登录：显示登录遮罩，工具计数显示提示
+            document.getElementById('tool-count').textContent = '-';
+            return;
+        }
+
+        // 2. 已登录：加载可用工具
+        try {
+            const resp = await fetch('/agent/tools', {
+                headers: { 'Authorization': 'Bearer ' + getToken() },
+            });
+            if (resp.ok) {
+                const tools = await resp.json();
+                document.getElementById('tool-count').textContent = tools.length;
+            }
+        } catch (e) {
+            document.getElementById('tool-count').textContent = '4';
+        }
+    }
+
+    init();
+</script>
+
+</body>
+</html>

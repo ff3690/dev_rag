@@ -1,0 +1,1403 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>研发知识图谱 - 3D Knowledge Graph</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        /* ===== CSS 变量定义 ===== */
+        :root {
+            --bg-primary: #0D1117;
+            --bg-secondary: #161B22;
+            --bg-tertiary: #1C2333;
+            --text-primary: #E6EDF3;
+            --text-secondary: #8B949E;
+            --text-white: #FFFFFF;
+            --color-tech: #00D4FF;
+            --color-concept: #7B61FF;
+            --color-tool: #FF6B6B;
+            --color-project: #FFD93D;
+            --color-process: #6BCB77;
+            --color-role: #FF8C42;
+            --color-edge-default: #30363D;
+            --font-family: 'PingFang SC', 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, sans-serif;
+            --panel-bg: rgba(22, 27, 34, 0.92);
+            --panel-border: rgba(48, 54, 61, 0.6);
+            --transition-fast: 0.2s ease;
+            --transition-normal: 0.3s ease;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: var(--font-family);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        /* ===== 顶部工具栏 ===== */
+        .toolbar {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            height: 56px;
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--panel-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            z-index: 100;
+        }
+
+        .toolbar-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-white);
+            letter-spacing: 0.5px;
+        }
+
+        .toolbar-stats {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .stat-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--color-tech);
+            box-shadow: 0 0 8px var(--color-tech);
+        }
+        .stat-dot.edges { background: #FF6B6B; box-shadow: 0 0 8px #FF6B6B; }
+
+        .stat-value {
+            font-weight: 600;
+            color: var(--text-white);
+            font-variant-numeric: tabular-nums;
+            min-width: 24px;
+            text-align: right;
+        }
+
+        .btn-refresh {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--panel-border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 13px;
+            cursor: pointer;
+            transition: var(--transition-fast);
+        }
+        .btn-refresh:hover {
+            background: #2D3548;
+            border-color: var(--color-tech);
+            color: var(--color-tech);
+        }
+        .btn-refresh.btn-rebuild:hover {
+            border-color: var(--color-tool);
+            color: var(--color-tool);
+        }
+        .btn-refresh.loading { opacity: 0.6; pointer-events: none; }
+        .refresh-icon { width: 14px; height: 14px; }
+
+        /* ===== 3D 画布容器 ===== */
+        #graph-canvas {
+            position: fixed;
+            top: 56px; left: 0; right: 0; bottom: 0;
+            background: var(--bg-primary);
+        }
+
+        /* ===== 空状态 ===== */
+        .empty-state {
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 50;
+        }
+        .empty-state.hidden { display: none; }
+        .empty-icon { font-size: 48px; margin-bottom: 16px; }
+        .empty-title { font-size: 18px; color: var(--text-primary); margin-bottom: 8px; }
+        .empty-desc { font-size: 14px; color: var(--text-secondary); }
+
+        /* ===== 加载遮罩 ===== */
+        .loading-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(13, 17, 23, 0.85);
+            backdrop-filter: blur(4px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+        }
+        .loading-overlay.hidden { display: none; }
+        .loading-spinner {
+            width: 40px; height: 40px;
+            border: 3px solid var(--bg-tertiary);
+            border-top-color: var(--color-tech);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 16px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text { font-size: 14px; color: var(--text-secondary); }
+
+        /* ===== 图例面板 ===== */
+        .legend-panel {
+            position: fixed;
+            top: 72px; left: 16px;
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            padding: 12px 14px;
+            z-index: 50;
+            max-width: 160px;
+        }
+        .legend-title {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .legend-items { display: flex; flex-direction: column; gap: 6px; }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--text-primary);
+        }
+        .legend-dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            box-shadow: 0 0 6px currentColor;
+        }
+
+        /* ===== 视角控制按钮 ===== */
+        .zoom-controls {
+            position: fixed;
+            right: 16px; bottom: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            z-index: 50;
+        }
+        .zoom-btn {
+            width: 36px; height: 36px;
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--panel-border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition-fast);
+        }
+        .zoom-btn:hover {
+            background: var(--bg-tertiary);
+            border-color: var(--color-tech);
+            color: var(--color-tech);
+        }
+
+        /* ===== 悬停提示 ===== */
+        .graph-tooltip {
+            position: fixed;
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--panel-border);
+            border-radius: 6px;
+            padding: 8px 12px;
+            pointer-events: none;
+            z-index: 60;
+            opacity: 0;
+            transition: opacity var(--transition-fast);
+            max-width: 240px;
+        }
+        .graph-tooltip.visible { opacity: 1; }
+        .tooltip-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-white);
+            margin-bottom: 2px;
+        }
+        .tooltip-type {
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
+        /* ===== 节点详情面板 ===== */
+        .detail-panel {
+            position: fixed;
+            top: 56px; right: 0;
+            width: 360px;
+            height: calc(100vh - 56px);
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            border-left: 1px solid var(--panel-border);
+            transform: translateX(100%);
+            transition: transform var(--transition-normal);
+            z-index: 90;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        .detail-panel.open { transform: translateX(0); }
+        .detail-close {
+            position: absolute;
+            top: 16px; right: 16px;
+            width: 28px; height: 28px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--panel-border);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .detail-close:hover { color: var(--text-white); border-color: var(--color-tool); }
+
+        .detail-header { margin-bottom: 20px; }
+        .detail-name {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-white);
+            margin-bottom: 8px;
+            padding-right: 32px;
+        }
+        .detail-type-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .detail-description {
+            margin-top: 10px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+        .detail-section { margin-bottom: 20px; }
+        .detail-section-title {
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 10px;
+        }
+        .relation-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--panel-border);
+            font-size: 13px;
+        }
+        .relation-item:last-child { border-bottom: none; }
+        .relation-badge {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+            background: rgba(255,255,255,0.05);
+        }
+        .relation-node-name { color: var(--text-primary); flex: 1; }
+        .relation-direction { color: var(--text-secondary); font-size: 14px; }
+        .detail-document {
+            font-size: 13px;
+            color: var(--text-primary);
+            padding: 8px 12px;
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+        }
+
+        /* ===== 性能信息显示 ===== */
+        .perf-info {
+            position: fixed;
+            bottom: 16px; left: 16px;
+            font-size: 11px;
+            color: var(--text-secondary);
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--panel-border);
+            border-radius: 6px;
+            padding: 6px 10px;
+            z-index: 50;
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+        .perf-info span { color: var(--color-tech); }
+
+        /* ===== 自动旋转控制面板 ===== */
+        .rotate-control {
+            position: fixed;
+            bottom: 16px; right: 16px;
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            padding: 10px 14px;
+            z-index: 50;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .rotate-toggle {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            user-select: none;
+        }
+        .rotate-toggle input { cursor: pointer; }
+        .rotate-slider-wrap {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .rotate-slider-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+        .rotate-slider {
+            -webkit-appearance: none;
+            width: 100px;
+            height: 4px;
+            background: var(--bg-tertiary);
+            border-radius: 2px;
+            outline: none;
+            cursor: pointer;
+        }
+        .rotate-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px; height: 14px;
+            border-radius: 50%;
+            background: var(--color-tech);
+            cursor: pointer;
+            box-shadow: 0 0 6px var(--color-tech);
+        }
+        .rotate-slider::-moz-range-thumb {
+            width: 14px; height: 14px;
+            border-radius: 50%;
+            background: var(--color-tech);
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 0 6px var(--color-tech);
+        }
+        .rotate-value {
+            font-size: 11px;
+            color: var(--color-tech);
+            font-family: 'Consolas', 'Monaco', monospace;
+            min-width: 28px;
+            text-align: right;
+        }
+
+        /* ===== 滚动条 ===== */
+        .detail-panel::-webkit-scrollbar { width: 4px; }
+        .detail-panel::-webkit-scrollbar-track { background: transparent; }
+        .detail-panel::-webkit-scrollbar-thumb { background: var(--panel-border); border-radius: 2px; }
+    </style>
+</head>
+<body>
+    <!-- ===== 顶部工具栏 ===== -->
+    <div class="toolbar">
+        <div class="toolbar-title">研发知识图谱 · 3D</div>
+        <div class="toolbar-stats">
+            <div class="stat-item">
+                <span class="stat-dot"></span>
+                <span>节点</span>
+                <span class="stat-value" id="node-count">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-dot edges"></span>
+                <span>关系</span>
+                <span class="stat-value" id="edge-count">0</span>
+            </div>
+            <button class="btn-refresh" id="btn-refresh" onclick="refreshGraph()">
+                <svg class="refresh-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="23 4 23 10 17 10"></polyline>
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                </svg>
+                刷新图谱
+            </button>
+            <button class="btn-refresh btn-rebuild" id="btn-rebuild" onclick="rebuildGraph()">
+                <svg class="refresh-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="5" cy="12" r="2.5"></circle>
+                    <circle cx="19" cy="5" r="2.5"></circle>
+                    <circle cx="19" cy="19" r="2.5"></circle>
+                    <line x1="7" y1="11" x2="17" y2="6"></line>
+                    <line x1="7" y1="13" x2="17" y2="18"></line>
+                </svg>
+                重建图谱
+            </button>
+        </div>
+    </div>
+
+    <!-- ===== 3D 画布 ===== -->
+    <div id="graph-canvas"></div>
+
+    <!-- ===== 空状态 ===== -->
+    <div class="empty-state" id="empty-state">
+        <div class="empty-icon">📊</div>
+        <div class="empty-title">暂无知识图谱数据</div>
+        <div class="empty-desc">上传文档后，系统将自动构建知识图谱</div>
+    </div>
+
+    <!-- ===== 加载遮罩 ===== -->
+    <div class="loading-overlay hidden" id="loading-overlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">正在加载知识图谱...</div>
+    </div>
+
+    <!-- ===== 图例面板 ===== -->
+    <div class="legend-panel">
+        <div class="legend-title">实体类型</div>
+        <div class="legend-items" id="legend-items">
+            <div class="legend-item"><span class="legend-dot" style="background:#00D4FF;color:#00D4FF"></span><span>技术</span></div>
+            <div class="legend-item"><span class="legend-dot" style="background:#7B61FF;color:#7B61FF"></span><span>概念</span></div>
+            <div class="legend-item"><span class="legend-dot" style="background:#FF6B6B;color:#FF6B6B"></span><span>工具</span></div>
+            <div class="legend-item"><span class="legend-dot" style="background:#FFD93D;color:#FFD93D"></span><span>项目</span></div>
+            <div class="legend-item"><span class="legend-dot" style="background:#6BCB77;color:#6BCB77"></span><span>流程</span></div>
+            <div class="legend-item"><span class="legend-dot" style="background:#FF8C42;color:#FF8C42"></span><span>角色</span></div>
+        </div>
+    </div>
+
+    <!-- ===== 视角控制按钮 ===== -->
+    <div class="zoom-controls">
+        <button class="zoom-btn" onclick="zoomIn()" title="放大">+</button>
+        <button class="zoom-btn" onclick="zoomOut()" title="缩小">−</button>
+        <button class="zoom-btn" onclick="resetView()" title="重置视角">⌂</button>
+    </div>
+
+    <!-- ===== 悬停提示 ===== -->
+    <div class="graph-tooltip" id="graph-tooltip">
+        <div class="tooltip-name" id="tooltip-name"></div>
+        <div class="tooltip-type" id="tooltip-type"></div>
+    </div>
+
+    <!-- ===== 节点详情面板 ===== -->
+    <div class="detail-panel" id="detail-panel">
+        <button class="detail-close" onclick="closeDetail()">✕</button>
+        <div id="detail-content"></div>
+    </div>
+
+    <!-- ===== 性能信息 =====
+         FPS（Frames Per Second，每秒帧数）：画面每秒渲染的帧数，衡量渲染流畅度。
+            - 数值越高越流畅；一般 60 即流畅，低于 30 会明显卡顿。
+         DrawCalls（绘制调用次数）：每帧向 GPU 提交的渲染命令次数。
+            - 该数值越低，CPU→GPU 通信开销越小，性能越好。
+            - 本页面通过 InstancedMesh（节点）和 LineSegments（边）把大量对象合并成
+              少数几次绘制，从而让 DrawCalls 保持很低。
+    -->
+    <div class="perf-info" id="perf-info">
+        FPS: <span id="perf-fps">0</span> | 节点: <span id="perf-nodes">0</span> | 边: <span id="perf-edges">0</span> | DrawCalls: <span id="perf-drawcalls">0</span>
+    </div>
+
+    <!-- ===== 自动旋转控制面板 ===== -->
+    <div class="rotate-control">
+        <label class="rotate-toggle">
+            <input type="checkbox" id="rotate-toggle" checked onchange="toggleAutoRotate(this.checked)">
+            自动旋转
+        </label>
+        <div class="rotate-slider-wrap">
+            <span class="rotate-slider-label">速度</span>
+            <input type="range" class="rotate-slider" id="rotate-speed" min="0" max="2" step="0.1" value="0.3" oninput="setRotateSpeed(this.value)">
+            <span class="rotate-value" id="rotate-value">0.3</span>
+        </div>
+    </div>
+
+    <!-- ===== Three.js ES Modules ===== -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // ===== 常量配置 =====
+        const API_BASE = window.location.origin;
+        const API_GRAPH_DATA = `${API_BASE}/graph/data`;
+        const API_GRAPH_REBUILD = `${API_BASE}/graph/rebuild`;
+        const API_NODE_DETAIL = `${API_BASE}/graph/node-detail`;
+
+        // 实体类型颜色映射（已知类型使用固定配色）
+        const TYPE_COLORS = {
+            '技术':   0x00D4FF,
+            '概念':   0x7B61FF,
+            '工具':   0xFF6B6B,
+            '项目':   0xFFD93D,
+            '流程':   0x6BCB77,
+            '角色':   0xFF8C42
+        };
+
+        // 随机颜色池（用于未知类型或无 type 字段的节点，确保每个节点都有鲜明颜色）
+        const RANDOM_COLOR_POOL = [
+            0x00D4FF, 0x7B61FF, 0xFF6B6B, 0xFFD93D, 0x6BCB77, 0xFF8C42,
+            0x00FFAA, 0xFF00AA, 0xAAAAFF, 0xFFAA00, 0x00AAFF, 0xAA00FF,
+            0x00FF66, 0xFF3366, 0x33AAFF, 0xFF6633, 0x66FF99, 0xFF99CC,
+            0x99CCFF, 0xCCFF66, 0xFF66CC, 0x66CCFF, 0xCC66FF, 0x66FFCC
+        ];
+
+        // 基于字符串生成稳定的颜色（相同名称始终返回相同颜色）
+        function getColorForNode(node, index) {
+            // 1. 优先按 type 匹配已知颜色
+            if (node.type && TYPE_COLORS[node.type]) {
+                return TYPE_COLORS[node.type];
+            }
+            // 2. 未知类型：基于节点名称 hash 从颜色池中取色（保证同名节点颜色一致）
+            const name = node.name || '';
+            let hash = 0;
+            for (let i = 0; i < name.length; i++) {
+                hash = ((hash << 5) - hash + name.charCodeAt(i)) | 0;
+            }
+            const poolIdx = Math.abs(hash) % RANDOM_COLOR_POOL.length;
+            return RANDOM_COLOR_POOL[poolIdx];
+        }
+
+        // 关系类型颜色映射
+        const EDGE_COLORS = {
+            '依赖': 0xFF6B6B,
+            '使用': 0x00D4FF,
+            '包含': 0x7B61FF,
+            '属于': 0xFFD93D,
+            '关联': 0x6BCB77,
+            '前置': 0xFF8C42,
+            '默认': 0x30363D
+        };
+
+        // ===== 全局状态 =====
+        let currentData = { nodes: [], edges: [] };
+        let selectedNodeId = null;
+        let hoveredNodeId = null;
+        let nodeIndexMap = new Map();  // nodeId → instanceIndex 映射
+
+        // Three.js 核心对象
+        let scene, camera, renderer, controls;
+        let nodeMesh = null;       // InstancedMesh 节点
+        let edgeLines = null;      // LineSegments 边
+        let sphereWireframe = null; // 球面参考网格
+        let labelGroup = null;     // 标签组（包含所有 Sprite 标签）
+        let labelDiv = null;       // 悬停时的临时标签 DOM 元素
+
+        // 交互相关
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        const tempMatrix = new THREE.Matrix4();
+        const tempColor = new THREE.Color();
+
+        // 按需渲染控制
+        let needsRender = true;
+        let lastFrameTime = performance.now();
+        // FPS（每秒帧数）统计相关：
+        //   fpsCounter：累计的渲染帧数；fpsLastTime：上一次统计的时间戳。
+        //   每秒统计一次，用「这一秒内渲染了多少帧」作为 FPS 数值显示在界面上。
+        let fpsCounter = 0;
+        let fpsLastTime = performance.now();
+
+        // 自动旋转控制
+        let autoRotateEnabled = true;  // 是否启用自动旋转
+        let autoRotateSpeed = 0.3;     // 旋转速度（0~2，越大越快）
+
+        // ===== 初始化 Three.js 场景 =====
+        function initThree() {
+            const container = document.getElementById('graph-canvas');
+            const w = container.clientWidth;
+            const h = container.clientHeight;
+
+            // 场景
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0D1117);
+            scene.fog = new THREE.Fog(0x0D1117, 200, 600);
+
+            // 相机
+            camera = new THREE.PerspectiveCamera(60, w / h, 0.1, 2000);
+            camera.position.set(0, 0, 280);
+
+            // 渲染器（开启抗锯齿，限制像素比避免高 DPI 屏卡顿）
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+            renderer.setSize(w, h);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(renderer.domElement);
+
+            // 轨道控制器（旋转、缩放、平移）
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;       // 旋转惯性
+            controls.dampingFactor = 0.08;
+            controls.rotateSpeed = 0.6;
+            controls.zoomSpeed = 0.8;
+            controls.panSpeed = 0.6;
+            controls.minDistance = 50;
+            controls.maxDistance = 800;
+            // 控制器变化时标记需要渲染
+            controls.addEventListener('change', () => { needsRender = true; });
+
+            // 环境光 + 点光源
+            scene.add(new THREE.AmbientLight(0x404060, 0.6));
+            const pointLight = new THREE.PointLight(0x00D4FF, 0.8, 500);
+            pointLight.position.set(100, 100, 100);
+            scene.add(pointLight);
+            const pointLight2 = new THREE.PointLight(0x7B61FF, 0.5, 500);
+            pointLight2.position.set(-100, -50, 100);
+            scene.add(pointLight2);
+
+            // 创建球面参考网格（半透明线框球）
+            const sphereGeo = new THREE.SphereGeometry(150, 32, 16);
+            const sphereMat = new THREE.MeshBasicMaterial({
+                color: 0x1C2333,
+                wireframe: true,
+                transparent: true,
+                opacity: 0.15
+            });
+            sphereWireframe = new THREE.Mesh(sphereGeo, sphereMat);
+            scene.add(sphereWireframe);
+
+            // 创建节点标签 DOM 元素（始终只有 1 个，按需显示）
+            labelDiv = document.createElement('div');
+            labelDiv.style.cssText = `
+                position: fixed;
+                pointer-events: none;
+                background: rgba(22, 27, 34, 0.92);
+                border: 1px solid rgba(48, 54, 61, 0.8);
+                border-radius: 4px;
+                padding: 3px 8px;
+                font-size: 12px;
+                color: #E6EDF3;
+                font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+                white-space: nowrap;
+                z-index: 55;
+                display: none;
+                transform: translate(-50%, -130%);
+            `;
+            document.body.appendChild(labelDiv);
+
+            // 窗口大小变化
+            window.addEventListener('resize', onWindowResize);
+
+            // 鼠标交互事件
+            renderer.domElement.addEventListener('mousemove', onMouseMove);
+            renderer.domElement.addEventListener('click', onMouseClick);
+            renderer.domElement.addEventListener('dblclick', onDoubleClick);
+
+            // 启动渲染循环
+            animate();
+        }
+
+        // ===== Fibonacci 球面分布算法 =====
+        // 将 N 个点均匀分布在球面上，避免聚集
+        function fibonacciSphere(n, radius) {
+            const points = [];
+            const phi = Math.PI * (Math.sqrt(5) - 1);  // 黄金角
+
+            for (let i = 0; i < n; i++) {
+                const y = 1 - (i / Math.max(1, n - 1)) * 2;  // y 从 1 到 -1
+                const r = Math.sqrt(1 - y * y);               // 当前纬度圆半径
+                const theta = phi * i;                         // 黄金角螺旋
+                const x = Math.cos(theta) * r;
+                const z = Math.sin(theta) * r;
+                points.push(new THREE.Vector3(x * radius, y * radius, z * radius));
+            }
+            return points;
+        }
+
+        // ===== 构建图谱 3D 对象 =====
+        function buildGraph(data) {
+            // 清理旧对象
+            if (nodeMesh) {
+                scene.remove(nodeMesh);
+                nodeMesh.geometry.dispose();
+                nodeMesh.material.dispose();
+                nodeMesh = null;
+            }
+            if (edgeLines) {
+                scene.remove(edgeLines);
+                edgeLines.geometry.dispose();
+                edgeLines.material.dispose();
+                edgeLines = null;
+            }
+
+            const { nodes, edges } = data;
+            const nodeCount = nodes.length;
+            if (nodeCount === 0) return;
+
+            // 根据节点数量自适应球体半径和节点大小
+            const radius = Math.max(80, Math.min(200, 40 + nodeCount * 0.8));
+            const nodeSize = Math.max(2, Math.min(6, 80 / Math.sqrt(nodeCount)));
+
+            // 更新球面参考网格大小
+            sphereWireframe.scale.setScalar(radius / 150);
+
+            // ---- 节点：InstancedMesh（1 个 draw call 渲染所有节点）----
+            // 使用 MeshBasicMaterial：不受光照影响，颜色直接显示，避免暗面发黑问题
+            const nodeGeo = new THREE.SphereGeometry(nodeSize, 12, 8);
+            const nodeMat = new THREE.MeshBasicMaterial({
+                transparent: true,
+                opacity: 0.9
+            });
+            nodeMesh = new THREE.InstancedMesh(nodeGeo, nodeMat, nodeCount);
+            nodeMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+
+            // Fibonacci 球面分布计算节点位置
+            const positions = fibonacciSphere(nodeCount, radius);
+            nodeIndexMap.clear();
+
+            for (let i = 0; i < nodeCount; i++) {
+                const node = nodes[i];
+                nodeIndexMap.set(node.id, i);
+
+                // 设置节点位置和缩放
+                tempMatrix.setPosition(positions[i]);
+                nodeMesh.setMatrixAt(i, tempMatrix);
+
+                // 设置节点颜色（按类型匹配，未知类型用基于名称的随机颜色）
+                const color = getColorForNode(node, i);
+                tempColor.setHex(color);
+                nodeMesh.setColorAt(i, tempColor);
+            }
+            // 标记实例颜色需要更新
+            if (nodeMesh.instanceColor) nodeMesh.instanceColor.needsUpdate = true;
+            nodeMesh.instanceMatrix.needsUpdate = true;
+            scene.add(nodeMesh);
+
+            // ---- 边：LineSegments（1 个 draw call 渲染所有边）----
+            const edgePositions = [];
+            const edgeColors = [];
+            for (const edge of edges) {
+                const srcIdx = nodeIndexMap.get(edge.source_node_id);
+                const tgtIdx = nodeIndexMap.get(edge.target_node_id);
+                if (srcIdx === undefined || tgtIdx === undefined) continue;
+
+                const srcPos = positions[srcIdx];
+                const tgtPos = positions[tgtIdx];
+
+                // 边的起点和终点坐标
+                edgePositions.push(srcPos.x, srcPos.y, srcPos.z);
+                edgePositions.push(tgtPos.x, tgtPos.y, tgtPos.z);
+
+                // 边的颜色：使用两端节点各自的颜色的渐变
+                const srcColor = getColorForNode(nodes[srcIdx], srcIdx);
+                const tgtColor = getColorForNode(nodes[tgtIdx], tgtIdx);
+                tempColor.setHex(srcColor);
+                edgeColors.push(tempColor.r, tempColor.g, tempColor.b);
+                tempColor.setHex(tgtColor);
+                edgeColors.push(tempColor.r, tempColor.g, tempColor.b);
+            }
+
+            const edgeGeo = new THREE.BufferGeometry();
+            edgeGeo.setAttribute('position', new THREE.Float32BufferAttribute(edgePositions, 3));
+            edgeGeo.setAttribute('color', new THREE.Float32BufferAttribute(edgeColors, 3));
+            const edgeMat = new THREE.LineBasicMaterial({
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.4
+            });
+            edgeLines = new THREE.LineSegments(edgeGeo, edgeMat);
+            scene.add(edgeLines);
+
+            // ---- 节点标签：Sprite + CanvasTexture（在节点圆点下方显示名称）----
+            buildLabels(nodes, positions, nodeSize);
+
+            // 更新性能信息
+            document.getElementById('perf-nodes').textContent = nodeCount;
+            document.getElementById('perf-edges').textContent = edges.length;
+            // DrawCalls：读取 three.js 内部统计的当前帧绘制调用次数。
+            //   renderer.info.render.calls 越小越好，说明每帧渲染命令越少、性能越高。
+            //   图中大量节点被合并到 1 次 InstancedMesh 绘制、所有边合并到 1 次 LineSegments 绘制，
+            //   因此这里的 DrawCalls 通常只有个位数。
+            document.getElementById('perf-drawcalls').textContent = renderer.info.render.calls;
+
+            // 缓存节点位置用于交互计算
+            nodeMesh.userData.positions = positions;
+            nodeMesh.userData.nodeSize = nodeSize;
+
+            needsRender = true;
+        }
+
+        // ===== 创建节点标签（Sprite + CanvasTexture）=====
+        // 性能策略：节点 ≤ 500 时为每个节点创建常驻标签；> 500 时只显示悬停标签
+        const MAX_LABELS = 500;
+
+        function buildLabels(nodes, positions, nodeSize) {
+            // 清理旧标签
+            if (labelGroup) {
+                scene.remove(labelGroup);
+                labelGroup.children.forEach(sprite => {
+                    if (sprite.material.map) sprite.material.map.dispose();
+                    sprite.material.dispose();
+                });
+                labelGroup = null;
+            }
+
+            // 节点太多时不创建常驻标签（性能考虑），仅靠悬停显示
+            if (nodes.length > MAX_LABELS) return;
+
+            labelGroup = new THREE.Group();
+            const labelOffset = nodeSize * 2.5;  // 标签在节点下方的偏移量
+
+            for (let i = 0; i < nodes.length; i++) {
+                const node = nodes[i];
+                const sprite = createLabelSprite(node.name || '未命名', nodeSize);
+                // 标签位置：节点正下方
+                sprite.position.copy(positions[i]);
+                sprite.position.y -= labelOffset;
+                sprite.userData.nodeIndex = i;
+                labelGroup.add(sprite);
+            }
+            scene.add(labelGroup);
+        }
+
+        // 创建单个文字 Sprite（用 Canvas 渲染文字纹理）
+        function createLabelSprite(text, nodeSize) {
+            const canvas = document.createElement('canvas');
+            const fontSize = 48;
+            const padding = 8;
+            const ctx = canvas.getContext('2d');
+
+            // 先设置字体测量文字宽度
+            ctx.font = `${fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`;
+            const metrics = ctx.measureText(text);
+            const textWidth = Math.ceil(metrics.width);
+            canvas.width = textWidth + padding * 2;
+            canvas.height = fontSize + padding * 2;
+
+            // 重新设置字体（canvas 尺寸变化后 context 会重置）
+            ctx.font = `${fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            // 描边（深色背景上的可读性）
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
+            ctx.lineWidth = 6;
+            ctx.strokeText(text, canvas.width / 2, canvas.height / 2);
+
+            // 填充文字
+            ctx.fillStyle = '#E6EDF3';
+            ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+            // 创建纹理
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.minFilter = THREE.LinearFilter;
+            texture.magFilter = THREE.LinearFilter;
+
+            // 创建 Sprite 材质
+            const material = new THREE.SpriteMaterial({
+                map: texture,
+                transparent: true,
+                depthTest: false   // 标签不被节点遮挡
+            });
+
+            const sprite = new THREE.Sprite(material);
+            // 缩放：让文字大小与节点大小匹配
+            const scale = nodeSize * 1.5;
+            sprite.scale.set(scale * (canvas.width / canvas.height), scale, 1);
+
+            return sprite;
+        }
+
+        // ===== 鼠标移动：悬停检测 =====
+        function onMouseMove(event) {
+            if (!nodeMesh) return;
+
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObject(nodeMesh);
+
+            if (intersects.length > 0) {
+                const instanceId = intersects[0].instanceId;
+                const node = currentData.nodes[instanceId];
+                if (node) {
+                    hoveredNodeId = node.id;
+                    // 显示 tooltip
+                    const tooltip = document.getElementById('graph-tooltip');
+                    document.getElementById('tooltip-name').textContent = node.name;
+                    document.getElementById('tooltip-type').textContent = node.type || '未知';
+                    tooltip.style.left = (event.clientX + 12) + 'px';
+                    tooltip.style.top = (event.clientY + 12) + 'px';
+                    tooltip.classList.add('visible');
+
+                    // 显示节点标签（跟随节点 3D 位置）
+                    showNodeLabel(node, instanceId);
+                    renderer.domElement.style.cursor = 'pointer';
+                    needsRender = true;
+                    return;
+                }
+            }
+
+            // 鼠标不在节点上
+            if (hoveredNodeId !== null) {
+                hoveredNodeId = null;
+                document.getElementById('graph-tooltip').classList.remove('visible');
+                hideNodeLabel();
+                renderer.domElement.style.cursor = 'default';
+                needsRender = true;
+            }
+        }
+
+        // ===== 显示节点标签（3D 位置投影到屏幕坐标）=====
+        function showNodeLabel(node, instanceId) {
+            const positions = nodeMesh.userData.positions;
+            if (!positions || !positions[instanceId]) return;
+
+            const pos = positions[instanceId].clone();
+            pos.project(camera);
+
+            const rect = renderer.domElement.getBoundingClientRect();
+            const x = (pos.x * 0.5 + 0.5) * rect.width + rect.left;
+            const y = (-pos.y * 0.5 + 0.5) * rect.height + rect.top;
+
+            labelDiv.style.left = x + 'px';
+            labelDiv.style.top = y + 'px';
+            labelDiv.textContent = node.name;
+            labelDiv.style.display = 'block';
+        }
+
+        function hideNodeLabel() {
+            labelDiv.style.display = 'none';
+        }
+
+        // ===== 鼠标点击：选中节点 =====
+        function onMouseClick(event) {
+            if (!nodeMesh) return;
+
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObject(nodeMesh);
+
+            if (intersects.length > 0) {
+                const instanceId = intersects[0].instanceId;
+                const node = currentData.nodes[instanceId];
+                if (node) {
+                    selectedNodeId = node.id;
+                    highlightNode(node.id);
+                    fetchNodeDetail(node.id);
+                }
+            }
+        }
+
+        // ===== 双击：重置视角 =====
+        function onDoubleClick() {
+            resetView();
+        }
+
+        // ===== 节点高亮 =====
+        function highlightNode(nodeId) {
+            if (!nodeMesh) return;
+
+            const idx = nodeIndexMap.get(nodeId);
+            if (idx === undefined) return;
+
+            const positions = nodeMesh.userData.positions;
+
+            // 遍历所有节点：选中节点放大高亮，其他节点变暗
+            for (let i = 0; i < currentData.nodes.length; i++) {
+                const node = currentData.nodes[i];
+                const isSelected = (node.id === nodeId);
+                const scale = isSelected ? 2.0 : 1.0;
+                tempMatrix.makeScale(scale, scale, scale);
+                tempMatrix.setPosition(positions[i]);
+                nodeMesh.setMatrixAt(i, tempMatrix);
+
+                // 选中节点保持原色，非选中节点颜色变暗
+                const origColor = getColorForNode(node, i);
+                if (isSelected) {
+                    tempColor.setHex(origColor);
+                } else {
+                    tempColor.setHex(origColor).multiplyScalar(0.3);
+                }
+                nodeMesh.setColorAt(i, tempColor);
+            }
+            nodeMesh.instanceMatrix.needsUpdate = true;
+            if (nodeMesh.instanceColor) nodeMesh.instanceColor.needsUpdate = true;
+
+            // 同步标签透明度：选中节点标签不透明，其他标签半透明
+            if (labelGroup) {
+                labelGroup.children.forEach(sprite => {
+                    sprite.material.opacity = (sprite.userData.nodeIndex === idx) ? 1.0 : 0.25;
+                });
+            }
+
+            needsRender = true;
+        }
+
+        // ===== 清除高亮 =====
+        function clearHighlight() {
+            if (!nodeMesh) return;
+
+            const positions = nodeMesh.userData.positions;
+            for (let i = 0; i < currentData.nodes.length; i++) {
+                const node = currentData.nodes[i];
+                tempMatrix.setPosition(positions[i]);
+                nodeMesh.setMatrixAt(i, tempMatrix);
+
+                // 恢复节点原始颜色
+                tempColor.setHex(getColorForNode(node, i));
+                nodeMesh.setColorAt(i, tempColor);
+            }
+            nodeMesh.instanceMatrix.needsUpdate = true;
+            if (nodeMesh.instanceColor) nodeMesh.instanceColor.needsUpdate = true;
+
+            // 恢复所有标签透明度
+            if (labelGroup) {
+                labelGroup.children.forEach(sprite => {
+                    sprite.material.opacity = 1.0;
+                });
+            }
+
+            needsRender = true;
+        }
+
+        // ===== 窗口大小变化 =====
+        function onWindowResize() {
+            const container = document.getElementById('graph-canvas');
+            const w = container.clientWidth;
+            const h = container.clientHeight;
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+            needsRender = true;
+        }
+
+        // ===== 渲染循环（按需渲染 + FPS 统计 + 自动旋转）=====
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // 控制器阻尼需要每帧更新
+            if (controls.update()) {
+                needsRender = true;
+            }
+
+            // 自动旋转：绕 Y 轴慢速旋转（所有图谱对象以原点为中心）
+            if (autoRotateEnabled && autoRotateSpeed > 0) {
+                const delta = autoRotateSpeed * 0.005;  // 旋转步长
+                if (nodeMesh) nodeMesh.rotation.y += delta;
+                if (edgeLines) edgeLines.rotation.y += delta;
+                if (sphereWireframe) sphereWireframe.rotation.y += delta;
+                if (labelGroup) labelGroup.rotation.y += delta;
+                needsRender = true;
+            }
+
+            // 悬停时标签需要跟随节点位置更新
+            if (hoveredNodeId !== null && nodeMesh) {
+                const idx = nodeIndexMap.get(hoveredNodeId);
+                if (idx !== undefined) {
+                    showNodeLabel(currentData.nodes[idx], idx);
+                }
+            }
+
+            // 按需渲染：只在场景变化时调用 render（大幅降低 GPU/CPU 占用）
+            if (needsRender) {
+                renderer.render(scene, camera);
+                needsRender = false;
+            }
+
+            // FPS 统计（每秒更新一次）
+            // 注意：本页为「按需渲染」，只有场景变化时才真正 render，
+            // 因此这里的 FPS 反映的是场景发生变化的帧率，静止时可能接近 0，
+            // 属于正常现象，不代表画面卡顿。
+            fpsCounter++;
+            const now = performance.now();
+            if (now - fpsLastTime >= 1000) {
+                document.getElementById('perf-fps').textContent = fpsCounter;
+                fpsCounter = 0;
+                fpsLastTime = now;
+            }
+        }
+
+        // ===== 数据获取 =====
+        async function fetchGraphData() {
+            try {
+                showLoading();
+                const response = await fetch(API_GRAPH_DATA, {
+                    headers: { 'Authorization': `Bearer ${getToken()}` }
+                });
+
+                if (!response.ok) {
+                    if (response.status === 401 || response.status === 403) {
+                        showAuthError();
+                        return null;
+                    }
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const result = await response.json();
+                if (!result.success) throw new Error('API returned unsuccessful response');
+                return result.data || { nodes: [], edges: [] };
+
+            } catch (error) {
+                console.error('Failed to fetch graph data:', error);
+                showError('获取图谱数据失败，请检查后端服务是否正常运行');
+                return null;
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function rebuildGraph() {
+            if (!confirm('重建图谱将清空现有图谱数据，并从所有已入库文档中重新抽取实体与关系，确认继续？')) return;
+            try {
+                showLoading();
+                const response = await fetch(API_GRAPH_REBUILD, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${getToken()}` }
+                });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const result = await response.json();
+                const data = await fetchGraphData();
+                if (data) {
+                    updateGraph(data);
+                    closeDetail();
+                }
+                return result;
+            } catch (error) {
+                console.error('Failed to rebuild graph:', error);
+                showError('重建图谱失败');
+                return null;
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function fetchNodeDetail(nodeId) {
+            try {
+                const response = await fetch(`${API_NODE_DETAIL}/${nodeId}`, {
+                    headers: { 'Authorization': `Bearer ${getToken()}` }
+                });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const result = await response.json();
+                if (result.success) showNodeDetail(result.data);
+            } catch (error) {
+                console.error('Failed to fetch node detail:', error);
+            }
+        }
+
+        // ===== Token 管理 =====
+        function getToken() {
+            const token = localStorage.getItem('rag_access_token') || localStorage.getItem('access_token');
+            return token || '';
+        }
+
+        function showAuthError() {
+            const emptyState = document.getElementById('empty-state');
+            emptyState.classList.remove('hidden');
+            emptyState.querySelector('.empty-title').textContent = '需要登录';
+            emptyState.querySelector('.empty-desc').textContent = '请先登录管理后台获取访问权限';
+            emptyState.querySelector('.empty-icon').textContent = '🔒';
+        }
+
+        // ===== 图谱更新 =====
+        function updateGraph(data) {
+            currentData = data;
+            const { nodes, edges } = data;
+
+            document.getElementById('node-count').textContent = nodes.length;
+            document.getElementById('edge-count').textContent = edges.length;
+
+            const emptyState = document.getElementById('empty-state');
+            if (nodes.length === 0) {
+                emptyState.classList.remove('hidden');
+                return;
+            }
+            emptyState.classList.add('hidden');
+
+            buildGraph(data);
+        }
+
+        // ===== 节点详情面板 =====
+        function showNodeDetail(data) {
+            const panel = document.getElementById('detail-panel');
+            const content = document.getElementById('detail-content');
+            const node = data.node;
+            const nodeColor = data.node_color;
+
+            let relatedHtml = '';
+            if (data.related_nodes && data.related_nodes.length > 0) {
+                relatedHtml = `
+                    <div class="detail-section">
+                        <div class="detail-section-title">关联关系 (${data.total_relations})</div>
+                        ${data.related_nodes.map(r => `
+                            <div class="relation-item">
+                                <span class="relation-badge" style="color:${nodeColor}">${r.relation}</span>
+                                <span class="relation-node-name">${escapeHtml(r.node.name)}</span>
+                                <span class="relation-direction">${r.direction === 'outgoing' ? '→' : '←'}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+
+            let docHtml = '';
+            if (data.document) {
+                docHtml = `
+                    <div class="detail-section">
+                        <div class="detail-section-title">来源文档</div>
+                        <div class="detail-document">
+                            📄 ${escapeHtml(data.document.title)} (${data.document.file_type})
+                        </div>
+                    </div>
+                `;
+            }
+
+            content.innerHTML = `
+                <div class="detail-header">
+                    <div class="detail-name">${escapeHtml(node.name)}</div>
+                    <span class="detail-type-badge" style="background:${nodeColor}20;color:${nodeColor};border:1px solid ${nodeColor}40">
+                        ${node.type}
+                    </span>
+                    ${node.description ? `<div class="detail-description">${escapeHtml(node.description)}</div>` : ''}
+                </div>
+                ${relatedHtml}
+                ${docHtml}
+            `;
+            panel.classList.add('open');
+        }
+
+        function closeDetail() {
+            document.getElementById('detail-panel').classList.remove('open');
+            selectedNodeId = null;
+            clearHighlight();
+        }
+
+        // ===== 视角控制 =====
+        function zoomIn() {
+            camera.position.multiplyScalar(0.8);
+            needsRender = true;
+        }
+
+        function zoomOut() {
+            camera.position.multiplyScalar(1.25);
+            needsRender = true;
+        }
+
+        function resetView() {
+            camera.position.set(0, 0, 280);
+            controls.target.set(0, 0, 0);
+            controls.update();
+            needsRender = true;
+        }
+
+        // ===== 自动旋转控制 =====
+        function toggleAutoRotate(enabled) {
+            autoRotateEnabled = enabled;
+            needsRender = true;
+        }
+
+        function setRotateSpeed(value) {
+            autoRotateSpeed = parseFloat(value);
+            document.getElementById('rotate-value').textContent = autoRotateSpeed.toFixed(1);
+            needsRender = true;
+        }
+
+        // ===== 加载状态 =====
+        function showLoading() {
+            document.getElementById('loading-overlay').classList.remove('hidden');
+            document.getElementById('btn-refresh').classList.add('loading');
+            const rebuildBtn = document.getElementById('btn-rebuild');
+            if (rebuildBtn) rebuildBtn.classList.add('loading');
+        }
+
+        function hideLoading() {
+            document.getElementById('loading-overlay').classList.add('hidden');
+            document.getElementById('btn-refresh').classList.remove('loading');
+            const rebuildBtn = document.getElementById('btn-rebuild');
+            if (rebuildBtn) rebuildBtn.classList.remove('loading');
+        }
+
+        function showError(message) {
+            const emptyState = document.getElementById('empty-state');
+            emptyState.classList.remove('hidden');
+            emptyState.querySelector('.empty-icon').textContent = '⚠️';
+            emptyState.querySelector('.empty-title').textContent = '加载失败';
+            emptyState.querySelector('.empty-desc').textContent = message;
+        }
+
+        // ===== 刷新 =====
+        async function refreshGraph() {
+            const btn = document.getElementById('btn-refresh');
+            btn.classList.add('loading');
+            const data = await fetchGraphData();
+            if (data) {
+                updateGraph(data);
+                closeDetail();
+            }
+            btn.classList.remove('loading');
+        }
+
+        // ===== 工具函数 =====
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // ===== 键盘快捷键 =====
+        window.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case 'Escape': closeDetail(); break;
+                case '+': case '=': zoomIn(); break;
+                case '-': zoomOut(); break;
+                case '0': resetView(); break;
+                case 'r': case 'R':
+                    if (!e.ctrlKey && !e.metaKey) refreshGraph();
+                    break;
+            }
+        });
+
+        // ===== 初始化 =====
+        async function init() {
+            initThree();
+            const data = await fetchGraphData();
+            if (data) updateGraph(data);
+        }
+
+        // 暴露给 HTML onclick 调用的函数
+        window.refreshGraph = refreshGraph;
+        window.rebuildGraph = rebuildGraph;
+        window.closeDetail = closeDetail;
+        window.zoomIn = zoomIn;
+        window.zoomOut = zoomOut;
+        window.resetView = resetView;
+        window.toggleAutoRotate = toggleAutoRotate;
+        window.setRotateSpeed = setRotateSpeed;
+
+        // 启动应用
+        init();
+    </script>
+</body>
+</html>

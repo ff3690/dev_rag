@@ -1,0 +1,52 @@
+fastapi>=0.100.0
+pydantic[email]>=2.0.0
+python-multipart>=0.0.6
+uvicorn>=0.20.0
+sqlalchemy>=2.0.0
+pydantic-settings>=2.0.0
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.0
+python-dotenv>=1.0.0
+pytest>=7.0.0
+httpx>=0.24.0
+json-repair>=0.25.0
+
+pypdf>=4.0.0
+# PyPDF2[image]>=3.0.0  # 备用：pypdf 的前身，已不推荐使用
+python-docx>=1.0.0
+pandas>=2.0.0
+numpy>=1.24.0
+pillow>=10.0.0
+paddlepaddle>=3.0.0
+paddleocr>=2.8.0
+
+# LlamaIndex RAG Framework
+# 注意：集成包（embeddings、vector-stores）版本号独立于核心包
+llama-index-core>=0.14.0
+llama-index-embeddings-huggingface>=0.7.0
+
+# HuggingFace Dependencies
+transformers>=4.30.0
+torch>=2.0.0
+sentence-transformers>=2.2.0
+
+# BGE-Reranker 精排模型依赖
+# 说明：FlagEmbedding 提供 BGE-Reranker-v2-m3 模型的加载和推理能力
+# 安装后验证：python -c "from FlagEmbedding import FlagReranker; print('FlagEmbedding ok')"
+# 注意：CPU 环境下 torch 会自动安装 CPU 版本，无需单独安装 CUDA 版本
+FlagEmbedding>=1.2.0
+
+# LangGraph Agent Framework
+langgraph>=0.2.0
+
+# LangChain Text Splitters (可选依赖)
+# 说明：langchain-text-splitters 是独立于核心 langchain 的轻量包，
+#       仅引入分割器；tiktoken 用于 TokenTextSplitter 的 BPE tokenizer
+# 安装依赖后验证：
+#       python -c "import langchain_core; print(langchain_core.__version__)"
+#       python -c "from langchain_core.embeddings import Embeddings; from langchain_core.documents import Document; print('langchain_core ok')"
+#       python -c "from langchain_text_splitters import RecursiveCharacterTextSplitter, TokenTextSplitter, MarkdownHeaderTextSplitter; print('splitters ok')"
+langchain-text-splitters>=0.3.0
+tiktoken>=0.7.0
+langchain-core>=1.0.0,<2.0.0   # 显式声明公共依赖，避免隐式安装时版本冲突
+langchain-experimental>=0.0.57   # 提供 SemanticChunker（langchain_semantic 策略）

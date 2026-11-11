@@ -1,0 +1,110 @@
+[
+  {
+    "name": "A4打印纸",
+    "category": "文具",
+    "last_month_usage": 15,
+    "unit": "包",
+    "unit_price": 25.0,
+    "trend": "稳定",
+    "note": "日常办公打印必需"
+  },
+  {
+    "name": "签字笔",
+    "category": "文具",
+    "last_month_usage": 48,
+    "unit": "支",
+    "unit_price": 3.5,
+    "trend": "上升",
+    "note": "新入职3人增加了消耗"
+  },
+  {
+    "name": "笔记本",
+    "category": "文具",
+    "last_month_usage": 20,
+    "unit": "本",
+    "unit_price": 8.0,
+    "trend": "略升",
+    "note": "项目会议增多"
+  },
+  {
+    "name": "订书机",
+    "category": "文具",
+    "last_month_usage": 2,
+    "unit": "个",
+    "unit_price": 15.0,
+    "trend": "偶发",
+    "note": "上个月损坏更换"
+  },
+  {
+    "name": "硒鼓/墨盒",
+    "category": "耗材",
+    "last_month_usage": 3,
+    "unit": "个",
+    "unit_price": 120.0,
+    "trend": "稳定",
+    "note": "每月例行更换"
+  },
+  {
+    "name": "文件夹",
+    "category": "文具",
+    "last_month_usage": 10,
+    "unit": "个",
+    "unit_price": 5.0,
+    "trend": "稳定",
+    "note": "项目归档需求"
+  },
+  {
+    "name": "便签纸",
+    "category": "文具",
+    "last_month_usage": 8,
+    "unit": "包",
+    "unit_price": 4.0,
+    "trend": "稳定",
+    "note": ""
+  },
+  {
+    "name": "垃圾袋",
+    "category": "清洁",
+    "last_month_usage": 5,
+    "unit": "卷",
+    "unit_price": 6.0,
+    "trend": "稳定",
+    "note": "日常清洁消耗"
+  },
+  {
+    "name": "洗手液",
+    "category": "清洁",
+    "last_month_usage": 2,
+    "unit": "瓶",
+    "unit_price": 12.0,
+    "trend": "稳定",
+    "note": ""
+  },
+  {
+    "name": "鼠标",
+    "category": "电子",
+    "last_month_usage": 2,
+    "unit": "个",
+    "unit_price": 45.0,
+    "trend": "偶发",
+    "note": "损坏更换"
+  },
+  {
+    "name": "键盘",
+    "category": "电子",
+    "last_month_usage": 1,
+    "unit": "个",
+    "unit_price": 89.0,
+    "trend": "偶发",
+    "note": "损坏更换"
+  },
+  {
+    "name": "USB扩展坞",
+    "category": "电子",
+    "last_month_usage": 3,
+    "unit": "个",
+    "unit_price": 65.0,
+    "trend": "上升",
+    "note": "新员工办公设备需求"
+  }
+]
